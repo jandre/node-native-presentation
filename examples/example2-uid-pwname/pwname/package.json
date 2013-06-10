@@ -1,0 +1,14 @@
+{
+  "name": "pwname",
+  "version": "0.1.0",
+  "description": "ERROR: No README.md file found!",
+  "main": "./lib/pwname.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "node-gyp rebuild"
+  },
+  "repository": "",
+  "author": "",
+  "license": "BSD",
+  "gypfile": true
+}

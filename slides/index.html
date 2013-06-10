@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>Native modules for node</title>
+
+		<meta name="description" content="A framework for easily creating beautiful presentations using HTML">
+		<meta name="author" content="Hakim El Hattab">
+
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<link rel="stylesheet" href="css/reveal.min.css">
+		<link rel="stylesheet" href="css/theme/nodev8.css" id="theme">
+
+		<!-- For syntax highlighting -->
+		<link rel="stylesheet" href="lib/css/github.css">
+
+		<!-- If the query includes 'print-pdf', use the PDF print sheet -->
+		<script>
+			document.write( '<link rel="stylesheet" href="css/print/' + ( window.location.search.match( /print-pdf/gi ) ? 'pdf' : 'paper' ) + '.css" type="text/css" media="print">' );
+		</script>
+
+		<!--[if lt IE 9]>
+		<script src="lib/js/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<!-- Any section element inside of this container is displayed as a slide -->
+			<div class="slides">
+
+				<section>
+          <h1>Going <strong>Native</strong></h1>
+          <div class="">
+            <h3> A friendly guide to native extensions for node.js</h3>
+            <div>
+              <h4> Jen Andre (jandre@gmail.com)</h4>
+            </div>
+				</section>
+
+        <section data-state="pink">
+          <h1>About</h1>
+          <div>
+              <h2 class="pink-text">Hi, I'm Jen.</h2>
+
+              <div>Full Stack Developer (but mostly backend)
+                <div>Co-founder, CTO @ www.threatstack.com</div>
+                <div>
+                  <div>@fun_cuddles</div>
+                  <a href="http://github.com/jandre">http://github.com/jandre</a>
+                </div>
+
+            </div>
+
+          </div>
+        </section>
+
+<section data-state="green">
+  <h1>What</h1>
+  <div>
+    <h2>Let's build a native module for node.js from the ground up</h2>
+  </div>
+
+</section>
+
+<section>
+  <h1>Why?</h1>
+  <div class="slide-content centered">
+    <h2 class="fragment">Performance</h2><h4 class="fragment">..But Think Carefully</h4>
+    <div class="fragment">
+      <h2>Access to Native System & Library APIs</h2>
+      <div>e.g.: sqlite, zeromq, messagepack</div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- Example: uid for username -->
+<section data-state="green">
+
+  <div>
+  <h1>Problem</h1>
+  <h2>looking up uid for username</h2>
+  <div> 
+     <div>uid-process/index.js</div>
+<pre><code data-trim contenteditable>
+var exec = require('child_process').exec;
+
+exports.uid = function(username, cb) {
+
+  exec('id -u ' + username, function(err, stdout, stderr) {
+    cb(err, stdout);
+  });
+
+}</code></pre>
+
+<pre class="terminal black">
+<span class="black">$ <span class="cursor selected"> </span><span class="fragment"><strong>node</strong><span class="cursor"> </span></span></span><span class="fragment">
+> <span class="fragment">var m = require('./uid-process');<span class="cursor"> </span></span></span> <span class="lightgrey fragment">
+undefined
+> <span class="cursor"> </span><span class="black fragment">m.uid('root', function(err,uid) {
+... if (err) return console.error("got error:", err);
+... console.log("uid:", uid);
+... });<span class="cursor"> </span></span></span> <span class="fragment"><span class="lightgrey">
+undefined</span> 
+> <strong class="">uid: 0 </strong> </span>
+</pre>
+</section>
+
+
+<section data-state="pink">
+
+  <h2>...any <strong>problems</strong> with <strong>this</strong>?</h2>
+</section>
+
+<section data-state="green">
+
+<h2>What happens if you run this 1000 times?</h2>
+<pre class="terminal black"><span class="black">$ <strong>cat manytimes.js</strong><span class="cursor selected"> </span></span><span class="fragment">
+var m = require('./uid-process');
+
+var counter = process.argv[2] || 1000;
+
+console.log("getting uid", counter, "times");
+
+for (var i = 0; i < counter; i++) {
+    m.uid('root', function(err,uid) {
+          if (err) return console.error("got error:", err);
+     });
+};
+$ <span class="cursor"> </span></span><span class="fragment"><strong>node manytimes.js</strong><span class="cursor"> </span></span><span class="fragment">
+getting uid times: 1000
+
+child_process.js:927
+    throw errnoException(process._errno, 'spawn');
+          ^
+Error: spawn EAGAIN
+    at errnoException (child_process.js:980:11)
+    at ChildProcess.spawn (child_process.js:927:11)
+    ...
+</pre>
+<div class="fragment pink-text sadsmile">:(</div>
+
+</section>
+
+
+<section data-state="pink">
+  <h1>a <strong>better</strong> way</h1>
+
+<div>
+<pre class="terminal">
+<span class="black">$ <span class="cursor selected"> </span><span class="fragment"><strong>man getpwnam</strong><span class="cursor"> </span></span></span>
+<span class="fragment terminal">
+NAME
+     getpwent, getpwnam, getpwnam_r, getpwuid, getpwuid_r, getpwuuid, getpwuuid_r, setpassent, setpwent, endpwent -- password database operations
+
+LIBRARY
+     Standard C Library (libc, -lc)
+
+SYNOPSIS
+     #include &lt;sys/types.h>
+     #include &lt;pwd.h>
+     #include &lt;uuid/uuid.h>
+
+     <strong class="pwname">struct passwd * getpwnam(const char *login);</strong>
+
+</span>
+</pre>
+<h4 class="pink-text fragment continue">"The getpwnam() function returns a pointer to a structure containing the broken-out fields of the record in the password database (e.g., the local password file /etc/passwd, NIS, and LDAP) that matches the username name."</h4>
+<div class="fragment" data-add-class="highlight" data-target="pwname"></div>
+</div>
+</section>
+
+<section data-state="blue">
+
+<div>
+   <h2 class="pink-text">struct passwd</h2>
+   <pre class="terminal">
+   The passwd structure is defined in <pwd.h> as follows:
+   
+   struct passwd {
+       char   *pw_name;       /* username */
+       char   *pw_passwd;     /* user password */
+       <span class="uid">uid_t   pw_uid;</span>        /* user ID */ <span class="fragment continue" data-add-class="highlight" data-target="uid" style="color: red; font-size: 30px; font-weight: bold">    &lt;- we want this! </span>
+       gid_t   pw_gid;        /* group ID */
+       char   *pw_gecos;      /* user information */
+       char   *pw_dir;        /* home directory */
+       char   *pw_shell;      /* shell program */
+   };
+   </pre>
+</div>
+</section>
+
+<section data-state="pink">
+  <h1>Goal</h1>
+  <div class="slide-content centered">
+    <h2>let's build a binding for getpwname :)</h2>
+
+    <div class="fragment left">
+<pre><code>/**
+* Get the uid for username.
+*/
+
+var pwname = require('./pwname');
+
+var username = process.argv[2] || 'root';
+
+try {
+  console.log("Uid for", username, "is", pwname.uid(username));
+} catch (err) {
+  console.error("User does not exist:", username, err);
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+
+<section data-state="green"> 
+<div>
+   <h2>Getting Started</h2>
+
+   <h3 class="pink-text">You'll need</h3>
+   <ul>
+     <li><strong class="emphasized-text">node-gyp</strong> 
+          <pre class="terminal">$ npm install node-gyp -g</pre>
+     </li>
+
+     <li><strong class="emphasized-text">gcc</strong> and other build tools for your environment
+       <ul><li style="font-size: .75em">if you can build node.js, you are probably good to go: https://github.com/joyent/node/wiki/Installation</li></ul>
+     </li>
+   </ul> 
+ </div>
+</section>
+
+<section data-state="blue">
+   <div>
+     <h2 class="pink-text">Setting up our project: pwname</h2>
+     <pre class="terminal">
+<span class="black">$ <span class="cursor selected"> </span><span class="fragment"><strong>mkdir pwname && cd pwname/</strong><span class="cursor"> </span></span></span> <span class="fragment"><span class="highlight"># setup folders </span><span class="black">
+$ <span class="cursor"> </span></span></span><span class="fragment"><strong>touch binding.gyp && mkdir src/ && touch src/pwname.cc</strong><span class="cursor"> </span></span> <span class="highlight fragment"># placeholders for c build and sources</span> <span class="black fragment">
+$ <span class="cursor"> </span><span class="fragment"><strong>mkdir lib && touch lib/pwname.js</strong><span class="cursor"> </span></span></span> <span class="highlight fragment"># placeholders for javascript interface </span><span class="black fragment">
+$ <span class="cursor"> </span><span class="fragment"><strong>npm init</strong><span class="cursor"> </span></span></span> <span class="highlight fragment"># npm init </span><span class="fragment">
+...
+{
+  "name": "pwname",
+  "version": "0.1.0",
+  "description": "ERROR: No README.md file found!",
+  "main": "lib/pwname.js",  <span class="highlight"> // NOTE: edited from index.js</span>
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "node-gyp rebuild"
+  },
+  "repository": "",
+  "author": "",
+  "license": "BSD",
+  "gypfile": true
+}</span>
+    </pre>
+  </div>
+
+</section>
+
+<section data-state="green"> 
+    <h2>basic <strong>module</strong> structure</h2>  
+
+       <div class="slide-content">
+         <div class="filesystem" style="float: left;">
+           <ul class="filesystem">
+             <li><span class="" style="font-weight: bold;">pwname/</span>
+               <ul>
+                 <li><span class="project-binding">binding.gyp</span>  <span class="description-gyp hidden description">node-gyp build script</span></li>
+                 <li><strong>lib/</strong>
+                   <ul>
+                     <li><span class="project-js">pwname.js</span>  <span class="description-js hidden description">js module entry point<span class="small transparent"> (not strictly required)</span></span></li>
+                   </ul>
+                 </li>
+                 <li><span class="project-packagejson">package.json</span></li>
+                 <li><strong>src/</strong>
+                   <ul>
+                     <li><span class="project-cc">pwname.cc</span>  <span class="description-cc hidden description">c++ module definition </span></li>
+                   </ul>
+                 </li>
+                 <li class="build hidden"><span>build/</span>
+                    <ul><li class="build"><span>Release/</span>
+                         <ul><li class="build"><span>pwname.node</span> <span class="description">generated build</span></li></ul>
+                     </li> 
+                    </ul>
+                 </li>
+
+               </li>
+             </ul>
+          </div> 
+
+          <div>
+          
+           <div class="fragment continue" data-add-class="highlight" data-target="project-binding"></div>
+           <div class="fragment" data-add-class="show" data-target="description-gyp"></div>
+
+           <div class="fragment continue" data-target="project-js" data-add-class="highlight"></div>
+           <div class="fragment" data-target="description-js" data-add-class="show"></div>
+
+
+           <div class="fragment continue" data-target="project-cc" data-add-class="highlight"></div>
+           <div class="fragment" data-target="description-cc" data-add-class="show"></div>
+
+          <div class="fragment" data-target="build" data-add-class="show"></div>
+
+          </div>
+      </section>
+
+      <section data-state="blue">
+        <div class="slide-content">
+          <h2 class="pink-text">binding.gyp</h2>
+          <h4 class="dark">how we build things</h4>
+          <div>
+            <pre class="terminal">{
+  "targets": [{
+    <span class="target_name">"target_name": "pwname"</span>, 
+    <span class="sources">"sources": [ "src/pwname.cc" ]</span>
+  }]
+}</pre>
+        <ul>
+          <li class="fragment continue">The <span class="emphasized-text code">target_name</span> dictates the shared object name <span class="emphasized-text code">pwname.node</span></li> 
+          <li style="display: none;" class="fragment" data-target="target_name" data-add-class="highlight"></li>
+          <li style="display: none;" class="fragment continue" data-target="target_name" data-remove-class="highlight"></li>
+          <li class="fragment continue"><span class="emphasized-text code">sources</span> get compiled and linked together to form <span class="emphasized-text code">pwname.node</span></li> 
+          <li style="display: none;" class="fragment" data-target="sources" data-add-class="highlight"></li>
+          <li style="display: none;" class="fragment continue" data-target="sources" data-remove-class="highlight"></li>
+
+          <li class="fragment">building our project
+              <ul><li class="code emphasized-text">node-gyp rebuild</li>
+              </ul>
+          </li>
+          <li class="fragment">This is a <strong>very basic</strong> example
+
+            <ul class="small">
+              <li><a href="https://github.com/TooTallNate/node-gyp">https://github.com/TooTallNate/node-gyp</a></li>
+              <li><a href="https://code.google.com/p/gyp/wiki/GypUserDocumentation">https://code.google.com/p/gyp/wiki/GypUserDocumentation</a></li>
+            </ul>
+          
+          </li>
+
+        </ul>
+
+
+        </div>
+      </div>
+    </section>
+
+
+<section data-state="pink">
+  <div class="container slide-content">
+    <div>
+      <h2 class="pink-text">lib/pwname.js</h2>
+      <h4 class="dark">our javascript wrapper</h4>
+
+      <pre class="terminal">
+var path = require('path');
+<span class="location">var _pwname = require(path.join(__dirname, '../build/Release/pwname.node'));</span>
+
+/**
+ * Get uid for user.
+ *
+ * @param {String} username - username
+ *
+ * @return {Integer} user id of user
+ *
+ */
+exports.uid = function(username) {
+  return _pwname.uid(username);
+};</pre>
+        <ul>
+          <li class="fragment continue">Our built node module in <span class="emphasized-text">build/Release</span></li> 
+          <li style="display: none;" class="fragment" data-target="location" data-add-class="highlight"></li>
+        </ul>
+     </div>
+  </div>
+</section>
+
+<section data-state="green">
+  <h2 class="pink-text">src/pwname.cc</h2>
+  <h4 class="dark">the c++ code</h4>
+  <h2>Now for the good stuff</h2>
+</section>
+
+<section data-state="blue">
+  <h2 class="pink-text">src/pwname.cc</h2>
+  <h4 class="dark">the basic structure</h4>
+<pre class="terminal"><div class="block"><div class="code header">#include &lt;v8.h&gt;
+#include &lt;node.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;pwd.h&gt;
+
+using namespace node;
+using namespace v8;
+
+Handle&lt;Value&gt; Uid(const Arguments& args);
+
+</div><div class="description header-description hidden">Our c/c++ headers</div></div><div class="block"><div class="code init">void Init(Handle&lt;Object&gt; target) { 
+   // ...  
+} </div> <div class="description init-description hidden">Initialize module.exports 
+you are exposing here </div></div>
+<div class="block"><div class="code implementation">Handle&lt;Value&gt; Uid(const Arguments& args) {
+  // ... 
+}</div><div class="description hidden implementation-description">
+implementation of our uid() export</div></div>
+extern "C" {
+  static void init (Handle&lt;Object&gt; target) {
+  <div class="block"><div class="code">    Init(target);</div></div>  }
+
+<div class="block"><div class="code module">  NODE_MODULE(pwname, init);</div><div class="description module-description hidden" style="">macro for module definition</div></div>} 
+</pre>
+
+<div class="fragment continue" data-highlight-block="module"></div>
+<div class="fragment continue" data-add-class="highlighted" data-target="module"></div>
+<div class="fragment" data-add-class="show" data-target="module-description"></div>
+
+<div class="fragment continue" data-remove-class="highlighted" data-target="module"></div>
+<div class="fragment continue" data-remove-class="show" data-target="module-description"></div>
+<div class="fragment continue" data-highlight-block="init"></div>
+<div class="fragment continue" data-add-class="highlighted" data-target="init"></div>
+<div class="fragment" data-add-class="show" data-target="init-description"></div>
+
+<div class="fragment continue" data-remove-class="highlighted" data-target="init"></div>
+<div class="fragment continue" data-remove-class="show" data-target="init-description"></div>
+<div class="fragment continue" data-highlight-block="implementation"></div>
+<div class="fragment continue" data-add-class="highlighted" data-target="implementation"></div>
+<div class="fragment" data-add-class="show" data-target="implementation-description"></div>
+</section>
+
+<section data-state="pink">
+  <h3 class="pink-text">void Init(Handle&lt;Object&gt; target)</h3>
+  <h4 class="dark">initializing the module</h4>
+
+   <pre class="terminal">void Init(Handle&lt;Object&gt; <span class="target">target</span>) {
+   HandleScope scope;
+   <span class="newfunction">target->Set(String::NewSymbol("uid"), 
+      FunctionTemplate::New(Uid)->GetFunction());</span>
+}</pre>
+
+    <div>
+      <ul>
+        <li class="fragment continue"><span class="emphasized-text code">target</span> corresponds to <span class="emphasized-text code">module.exports</span> in node.
+        </li>
+        <li class="fragment" style="display: none;" data-add-class="highlight" data-target="target"></li>
+        <li class="fragment continue" style="display: none;" data-remove-class="highlight" data-target="target"></li>
+        <li class="fragment continue"><span class="emphasized-text code">exports.uid = <i>   Handle&lt;Value&gt; Uid(const Arguments& args);</i></span></li>
+        
+        </li>
+        <li class="fragment" style="display: none;" data-add-class="highlight" data-target="newfunction"></li>
+      </ul>
+    </div> 
+</section>
+
+<section data-state="green">
+  <h3 class="pink-text">Our uid() function</h3>
+
+<pre class="terminal cpp">
+using namespace v8;
+
+Handle&lt;Value&gt; Uid(<span class="keyword">const</span> Arguments&amp; args)
+{
+  <span class="scope">HandleScope scope;</span>
+  <span class="keyword">struct</span> passwd *user = NULL;
+  <div class="args"><span class="keyword">if</span> (args.Length() &gt; <span class="number">0</span> &amp;&amp; args[<span class="number">0</span>]-&gt;IsString()) {
+    <span class="v8 not-displayed">v8::</span>String::Utf8Value name(args[<span class="number">0</span>]-&gt;ToString());
+    user = getpwnam(*name);
+  } <span class="keyword">else</span> {
+    <span class="keyword">return</span> ThrowException(Exception::Error(
+       String::New(<span class="string">"you must supply the username"</span>)));
+}</div>
+  <span class="keyword">if</span> (user) {
+    <span class="result">Handle&lt;Value&gt; result = <span class="v8 not-displayed">v8::</span>Number::New(user-&gt;pw_uid);</span>
+    <span class="keyword">return</span> <span class="scope">scope.Close(result);</span>
+  } <span class="keyword">else</span> {
+    <span class="keyword">return</span> ThrowException(Exception::Error(String::New(<span class="string">"username not found"</span>)));
+  }
+}
+</pre>
+    <div class="first">
+      <ul class="shadowed fragment continue">
+        <li class="fragment continue" style="display: none;" data-add-class="highlight" data-target="scope"></li>
+        <li class="fragment">Always declare <span class="emphasized-text code">HandleScope</span> at the top of your functions when you are creating v8 objects.</li>
+        <li class="fragment"><span class="emphasized-text code">scope.Close(Handle)</span> tells <span class="emphasized-text code">HandleScope</span> not to free the memory associated with <span class="emphasized-text code">result</span>.</li>
+
+        <li class="fragment continue" style="display: none;" data-remove-class="highlight" data-target="target"></li>
+      </ul>
+    </div> 
+
+    <li class="fragment continue" style="display: none;" data-remove-class="highlight" data-target="scope"></li>
+    <div class="fragment continue" style="not-displayed" data-add-class="not-displayed" data-target="first"></div>
+    <div class="fragment continue" style="not-displayed" data-add-class="displayed" data-target="second"></div>
+
+    <div class="second not-displayed">
+      <ul class="shadowed fragment continue">
+        <li class="fragment continue" style="display: none;" data-add-class="highlight" data-target="args"></li>
+        <li class="fragment continue" style="display: none;" data-remove-class="highlight" data-target="target"></li>
+      </ul>
+    </div> 
+
+    <div class="fragment" style="not-displayed" data-remove-class="displayed" data-target="second"></div>
+
+    <li class="fragment continue" style="display: none;" data-remove-class="highlight" data-target="args"></li>
+    <div class="fragment continue" style="not-displayed" data-add-class="not-displayed" data-target="second"></div>
+    <div class="fragment continue" style="not-displayed" data-add-class="displayed" data-target="third"></div>
+
+    <div class="third not-displayed">
+      <ul class="shadowed fragment continue">
+        <li class="fragment continue" style="display: none;" data-add-class="highlight" data-target="result"></li>
+        <li class="fragment">On success, convert the uid value to a <span class="emphasized-text code">v8::Number</span>.</li>
+        <li class="fragment continue">All inputs/outputs that interact with javascript <strong>must</strong> be v8 datatypes live on the v8 heap.
+          <ul><li><span class="emphasized-text code">v8::Array, v8::Object, v8::Function, v8::Number, etc</span></li>
+            <li class="small">http://izs.me/v8-docs/classv8_1_1Object.html</li>
+          </ul>
+        </li>
+      </ul>
+    </div> 
+    <li class="fragment continue" style="display: none;" data-remove-class="highlight" data-target="result"></li>
+    <li class="fragment" style="display: none;" data-add-class="inline" data-target="v8"></li>
+
+
+</section>
+
+<section data-state="pink">
+  <h3 class="pink-text">More about Handles</h3>
+  <div class="dark">Reference counters for pointers</div>
+  
+  <div>
+    <svg width="660px" height="250px" viewBox="0 0 457 123" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:sketch="http://www.bohemiancoding.com/sketch/ns">
+       <title>Slice 1</title>
+       <description>Created with Sketch (http://www.bohemiancoding.com/sketch)</description>
+       <defs></defs>
+       <g id="Page 1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+           <g id="Landscape" transform="translate(-11.000000, -13.000000)">
+               <g id="Group" transform="translate(11.000000, 13.000000)">
+                   <path class="v8-diagram-box" d="M101,-3 L101,32 L352,32 L352,-3 L101,-3 Z M101,-3" id="v8-handle" stroke="#979797" fill="#D8D8D8"></path>
+                   <path class="v8-arrows" d="M102.5,53.3055556 L102.5,96.7331611" id="Line" stroke="#000" stroke-linecap="square"></path>
+                   <path class="v8-arrows" d="M352,53.3 L352,88.882579" id="Line" stroke="#000" stroke-linecap="square"></path>
+                   <path class="v8-arrows" d="M101.400574,52.5 L351.561564,52.5" id="Line" stroke="#000" stroke-linecap="square"></path>
+                   <text id="v8HandleT" fill="#000000" font-family="Helvetica" font-size="12.4137931" font-weight="bold" x="187" y="20.4137931">
+                       <tspan>v8:Handle&lt;T></tspan>
+                   </text>
+                   <path id="v8-local" class="v8-diagram-box" d="M0,76 L0,113 L217,113 L217,76 L0,76 Z M0,76" id="Rectangle 1" stroke="#979797" fill="#D8D8D8"></path>
+                   <text id="v8LocalT" fill="#000000" font-family="Helvetica" font-size="12.4137931" font-weight="bold" x="67" y="99.4137931">
+                       <tspan>v8:Local&lt;T></tspan>
+                   </text>
+                   <path id="v8-persistent" class="v8-persistent v8-diagram-box" d="M240,76 L240,113 L457,113 L457,76 L240,76 Z M240,76" id="Rectangle 1" stroke="#979797" fill="#D8D8D8"></path>
+                   <text id="v8PersistentT" fill="#000000" font-family="Helvetica" font-size="12.4137931" font-weight="bold" x="296" y="99.4137931">
+                       <tspan>v8:Persistent&lt;T></tspan>
+                   </text>
+                   <path class="v8-arrows" d="M228,51.7025818 L228,34.2733465" id="Line" stroke="#000" stroke-linecap="square"></path>
+                   <path class="v8-arrows" id="Line decoration-1" d="M228,34.7025819 C226.95,38.482582 226.05,41.722582 225,45.502582 C227.1,45.5025819 228.9,45.5025818 231,45.5025817 C229.95,41.7225818 229.05,38.4825819 228,34.7025819 C228,34.7025819 228,34.7025819 228,34.7025819 Z M228,34.7025819" stroke="#000" stroke-linecap="square"></path>
+               </g>
+           </g>
+       </g>
+   </svg> 
+  </div>
+
+
+   <div class="handle-desc-1 fragment"> 
+       <span class="emphasized-text code">Local&lt;T&gt; and Handle&lt;T&gt;</span> 
+         free their contents when out of scope.
+   
+<pre><code class="cpp">void UselessFunction() {
+ HandleScope scope;
+ Local&lt;Value&gt; helloHandle = String::New("hello"); // allocation here
+} // scope ends.  The string pointed to by helloHandle is auto-deleted.</code></pre>
+   </div>
+
+   <div class="fragment not-displayed continue" data-add-class="not-displayed" data-target="handle-desc-1"></div>
+   <div class="fragment not-displayed continue" data-add-class="highlighted" data-target="v8-persistent"></div>
+   <div class="handle-desc-2 fragment"> 
+       <div><span class="emphasized-text code">Persistent&lt;T&gt;</span> handles must be manually disposed.</div>
+   
+<pre><code class="cpp">Handle&lt;Value&gt; UselessFunction() {
+ HandleScope scope;
+ Persistent&lt;Value&gt; helloHandle = Persistent&lt;String&gt;::New(String::New("hello")); // allocation here 
+ return helloHandle;
+}  // v8::String will live until handle.Dispose() is called
+</code></pre>
+
+<div class="dark small" style="margin-top: 20px;"> <a href="http://create.tpsitulsa.com/wiki/V8/Handles">http://create.tpsitulsa.com/wiki/V8/Handles</a></div>
+</div>
+   
+
+</section>
+
+
+<section data-state="blue">
+  <h3 class="pink-text">Example: Returning Objects</h3>
+
+<pre class="terminal cpp">
+Handle&lt;Value&gt; Get(<span class="keyword">const</span> Arguments&amp; args)
+{
+  HandleScope scope;
+  ...
+
+  <span class="keyword">if</span> (user) {
+    Local&lt;Object&gt; obj = Object::New();
+    obj-&gt;Set(String::New(<span class="string">"uid"</span>), Number::New(user-&gt;pw_uid));
+    obj-&gt;Set(String::New(<span class="string">"info"</span>), String::New(user-&gt;pw_gecos));
+    obj-&gt;Set(String::New(<span class="string">"dir"</span>), String::New(user-&gt;pw_dir));
+    obj-&gt;Set(String::New(<span class="string">"shell"</span>), String::New(user-&gt;pw_shell));
+    obj-&gt;Set(String::New(<span class="string">"gid"</span>), Number::New(user-&gt;pw_gid));
+    <span class="keyword">return</span> scope.Close(obj);
+  } <span class="keyword">else</span> {
+    <span class="keyword">return</span> ThrowException(Exception::Error(String::New(<span class="string">"username not found"</span>)));
+  }
+}</pre>
+
+<pre class="terminal black">
+<span>$ <span class="cursor selected"> </span><span class="fragment"><strong>node</strong><span class="cursor"> </span></span></span><span class="fragment">
+> <span class="fragment lightgrey">require('./pwname/build/Release/pwname.node').get('root');<span class="cursor"> </span></span></span> <span class="fragment">
+{ uid: <span class="yellow">0</span>,
+info: <span class="green">'System Administrator'</span>,
+dir: <span class="green">'/var/root'</span>,
+shell: <span class="green">'/bin/sh'</span>,
+gid: <span class="yellow">0</span> }
+<span class="cursor"> </span></span></span> <span class="lightgrey fragment">
+</span></pre>
+</section>
+
+<section data-state="green">
+  <h3 class="pink-text">Example: Calling JS Functions</h3>
+
+<pre class="terminal cpp">Handle&lt;Value&gt; Get(<span class="keyword">const</span> Arguments&amp; args)  <span class="comment">// module.get(username, callback)</span>
+{
+  HandleScope scope;
+  <span class="keyword">struct</span> passwd *user = NULL;
+  Local&lt;Function&gt; callback;
+
+  <span class="keyword">if</span> (args.Length() &gt; <span class="number">1</span> &amp;&amp; args[<span class="number">1</span>]-&gt;IsFunction()) {
+    callback = Local&lt;Function&gt;::Cast(args[<span class="number">1</span>]);
+  }
+
+  <span class="comment">// ... pwname fetch </span>
+
+  <span class="keyword">if</span> (user) {
+    Local&lt;Object&gt; obj = Object::New();
+    obj-&gt;Set(String::New(<span class="string">"uid"</span>), Number::New(user-&gt;pw_uid));
+    <span class="comment">// ... setting data as usual</span>
+
+    <span class="keyword">if</span> (callback.IsEmpty()) {
+      <span class="keyword">return</span> scope.Close(obj);
+    } <span class="keyword">else</span> { 
+      <span class="callback">Local&lt;Value&gt; argv[] = { Local&lt;Value&gt;::New(v8::Null()), obj };</span>
+      <span class="comment">// callback(null, obj); </span>
+      <span class="callback"><span class="keyword">return</span> callback-&gt;Call(Context::GetCurrent()-&gt;Global(), <span class="number">2</span>, argv); </span>
+    }
+  } <span class="keyword">else</span> {
+    <span class="comment">// ... error</span>
+  }
+}</pre>
+
+<div class="fragment not-displayed" data-add-class="highlight" data-target="callback"></div>
+</section>
+
+<section>
+  <h1>Survived <strong>so</strong> far?</h1>
+<h2>next</h2>
+<h3>wrapping c++ objects for javascript</h3>
+<h3 class="dark">async work with threads! using libuv</h3>
+</section>
+
+<section data-state="green">
+  <h1>Your <strong>Mission</strong></h1>
+  <h2>a simple Time class</h2>
+  <pre><code class="javascript">var Time = require('./simpletime').Time;
+var time = new Time();
+console.log("Epoch is", time.epoch()); // Epoch is 1371486877
+console.log("Time is", time.string()); // Time is Mon Jun 17 12:34:37 2013
+time.addSeconds(10);
+console.log("Epoch is", time.epoch()); // Epoch is 1371486887
+console.log("Time is", time.string()); // Time is Mon Jun 17 12:34:47 2013
+</code></pre>
+</section>
+
+<section>
+  <h2 class="pink-text">Our tools</h2>
+  <pre><code class="c">#include &lt;stdio.h&gt;
+#include &lt;time.h&gt;
+
+int main ()
+{
+  time_t rawtime;
+  struct tm * timeinfo;
+  char timestring[26];
+
+  time (&rawtime);  /* get the current time and store in rawtime */
+  timeinfo = localtime (&rawtime); /* convert time -> timeinfo */
+  strftime(timestring, 26, "%c", timeinfo);
+  printf ("Current local time and date: %s\n", timestring); 
+
+  return 0;
+}</code></pre>
+      </section>
+      
+      <section data-state="pink">
+<h2 class="pink-text">simpletime.cc definition</h2>
+
+<pre class="cpp terminal"><span class="keyword">class</span> Time : <span class="keyword">public</span> node::ObjectWrap {
+
+  <span class="keyword">public</span>:
+    <span class="keyword">static</span> Handle&lt;Value&gt; New(<span class="keyword">const</span> Arguments &amp;args); <span class="comment">// new Time();</span>
+    <span class="keyword">static</span> Handle&lt;Value&gt; Epoch(<span class="keyword">const</span> Arguments &amp;args); <span class="comment">// time.epoch();</span>
+    <span class="keyword">static</span> Handle&lt;Value&gt; String(<span class="keyword">const</span> Arguments &amp;args); <span class="comment">// time.string();</span>
+    <span class="keyword">static</span> Handle&lt;Value&gt; AddSeconds(<span class="keyword">const</span> Arguments &amp;args); <span class="comment">// time.addSeconds(60);</span>
+
+  <span class="keyword">private</span>:
+    Time();  <span class="comment">// constructor</span>
+    ~Time(); <span class="comment">// destructor</span>
+    time_t value;
+    <span class="keyword">int</span> getEpoch();
+    <span class="keyword">void</span> addSeconds(<span class="keyword">int</span>);
+    <span class="keyword">char</span> * getString();
+
+};
+
+<span class="keyword">void</span> Init(Handle&lt;Object&gt; target);
+
+ <span class="comment">// ... implementations elided </span>
+
+<span class="keyword">extern</span> <span class="string">"C"</span> {
+  <span class="keyword">static</span> <span class="keyword">void</span> init(Handle&lt;Object&gt; target)
+  {
+    Init(target);
+  }
+
+  NODE_MODULE(simpletime, init);
+}</pre>
+
+</section>
+
+      <section>
+<h2 class="pink-text">Init()</h2>
+
+<pre class="cpp terminal"><span class="keyword">void</span> Init(Handle&lt;Object&gt; target) {
+  HandleScope scope;
+  <div class="function-desc-1">  Local&lt;FunctionTemplate&gt; tpl = FunctionTemplate::New(Time::New);
+  tpl-&gt;SetClassName(String::NewSymbol(<span class="string">"Time"</span>));
+  tpl-&gt;InstanceTemplate()-&gt;SetInternalFieldCount(<span class="number">1</span>);</div><div class="function-desc-2">
+  tpl-&gt;PrototypeTemplate()-&gt;Set(String::NewSymbol(<span class="string">"epoch"</span>),
+      FunctionTemplate::New(Time::Epoch)-&gt;GetFunction());
+
+  tpl-&gt;PrototypeTemplate()-&gt;Set(String::NewSymbol(<span class="string">"string"</span>),
+      FunctionTemplate::New(Time::String)-&gt;GetFunction());
+
+  tpl-&gt;PrototypeTemplate()-&gt;Set(String::NewSymbol(<span class="string">"addSeconds"</span>),
+      FunctionTemplate::New(Time::AddSeconds)-&gt;GetFunction());</div><div class="function-desc-1">
+  Persistent&lt;Function&gt; constructor = Persistent&lt;Function&gt;::New(tpl-&gt;GetFunction());
+  target-&gt;Set(String::NewSymbol(<span class="string">"Time"</span>), constructor);</div>
+}
+</pre>
+        <div class="f1">
+          <ul>
+           <li class="fragment continue"><span class="emphasized-text code">function Time() {};</span></li>
+           <li class="fragment continue"><span class="emphasized-text code">Time.prototype.constructor = ...</span></li>
+          </ul>
+        </div>
+        
+        <div class="not-displayed fragment" data-add-class="highlight" data-target="function-desc-1"></div>
+        <div class="not-displayed fragment continue" data-remove-class="highlight" data-target="function-desc-1"></div>
+        <div class="not-displayed fragment continue" data-add-class="not-displayed" data-target="f1"></div>
+        <div class="not-displayed fragment continue" data-add-class="displayed" data-target="f2"></div>
+        <div class="not-displayed fragment continue" data-add-class="highlight" data-target="function-desc-2"></div>
+        
+        <div class="f2 not-displayed">
+        <ul>
+          <li class=""><span class="emphasized-text code">Time.prototype.epoch = function() ...</span></li>
+          <li class=""><span class="emphasized-text code">Time.prototype.string = function() ...</span></li>
+          <li class=""><span class="emphasized-text code">Time.prototype.addSeconds = function() ...</span></li>
+        </ul>
+        </div>
+        
+      </section>
+
+
+
+    <section data-state="green">
+<h2 class="pink-text">ObjectWrap->Wrap()</h2>
+<h3 class="dark">creating our Time object</h3>
+<pre><code class="cpp">
+Handle&lt;Value&gt; Time::New(const Arguments& args) {
+  HandleScope scope;
+  Time* obj = new Time();
+  obj-&gt;Wrap(args.This());
+  return args.This();
+}
+</code></pre>
+      </section>
+
+      <section data-state="pink">
+<h2 class="pink-text">Calling a method</h2>
+<pre><code class="cpp">Handle&lt;Value&gt; Time::AddSeconds(const Arguments& args)
+{
+  HandleScope scope;
+  Time* obj = Time::Unwrap&lt;Time&gt;(args.This());
+  if (args.Length() &gt; 0 && args[0]-&gt;IsNumber()) {
+    int seconds = args[0]-&gt;ToInteger()-&gt;Value();
+    obj-&gt;addSeconds(seconds);
+  }
+  return scope.Close(v8::Undefined());
+}</code></pre>
+
+      </section>
+
+      <section>
+        <h1>Async <strong>Example</strong></h1> 
+      </section>
+<!-- async -->
+      <section>
+        <h2 class="pink-text">Our problem: Fibonacci</h2>
+        <div>
+          "Here's a fun fact: every function call that does CPU work also blocks. This function, which calculates the n'th Fibonacci number, will block the current thread of execution because it's using the CPU."
+          <div class="dark"> -- `node js is cancer` by Ted Dzuiba</div>
+        </div>
+        
+<pre><code class="javascript">function fibonacci(n) {
+
+  if (n <= 0)
+    return 0;
+
+  if (n == 1)
+    return 1;
+
+  return fibonacci(n  - 1) + fibonacci(n - 2);
+}
+</pre></code>
+
+      </section>
+
+      <section data-state="pink">
+        <h2 class="pink-text">uv_queue_work to the rescue</h2>
+        <pre class="terminal">
+uv_queue_work(<span class="uv-queue-1">uv_default_loop()</span>, <span class="uv-queue-2">&context->request</span>,
+      <span class="uv-queue-3">FibonacciWorker</span>, <span class="uv-queue-4">FibonacciWorkerAfter</span>); 
+        </pre>
+
+        <ul>
+          <li class="fragment continue">Runs <span class="code emphasized-text">FibonacciWorker</span> function in a separate thread
+            <div class="fragment" data-add-class="highlight" data-target="uv-queue-3"></div>
+          </li>
+          <li class="fragment continue">On completion, <span class="code emphasized-text">FibonacciWorkerAfter</span> executed in event loop. 
+            <div class="fragment continue" data-remove-class="highlight" data-target="uv-queue-3"></div>
+            <div class="fragment" data-add-class="highlight" data-target="uv-queue-4"></div>
+          </li>
+          <li class="fragment continue"><span class="code emphasized-text">context->request</span> is an <span class="code emphasized-text">uv_work_t</span>object that stores our input/output values, and gets supplied to both functions.
+            <div class="fragment continue" data-remove-class="highlight" data-target="uv-queue-4"></div>
+            <div class="fragment" data-add-class="highlight" data-target="uv-queue-2"></div>
+          </li>
+        </ul>
+      </section>
+
+      <section>
+<h3 class="pink-text">Context for uv_queue_work worker functions</h3>
+
+<pre class="terminal cpp"><span class="keyword">struct</span> FibonacciContext {
+
+  <span class="highlight">uv_work_t request;</span>
+  <span class="keyword">int</span> input; <span class="comment">// the value passed to fibonacci();</span>
+  <span class="keyword">unsigned</span> <span class="keyword">int</span> result; <span class="comment">// save the result to be calculated</span>
+  Persistent&lt;Function&gt; callback; <span class="comment">// js callback</span>
+
+  FibonacciContext(<span class="keyword">int</span> n, Handle&lt;Function&gt; callback) {
+    <span class="keyword">this</span>-&gt;input = n;
+    <span class="keyword">this</span>-&gt;callback = Persistent&lt;Function&gt;::New(callback);
+    <span class="comment">// set the data to point to myself</span>
+    <span class="highlight"><span class="keyword">this</span>-&gt;request.data = <span class="keyword">this</span>;</span>
+  }
+
+  ~FibonacciContext() {
+    <span class="keyword">this</span>-&gt;request.data = NULL;
+    <span class="keyword">this</span>-&gt;callback.Dispose();
+  }
+};</pre>
+
+<div><span class="emphasized-text code">request->data</span> == FibonacciContext</div>
+      </section>
+
+      <section data-state="green">
+
+<h3 class="pink-text">fibonacci.calculate</h3>
+        <div class="two-columns">
+          <div class="left">
+          <pre class="cpp terminal">Handle&lt;Value&gt; <span class="keyword">Calculate</span>(const Arguments& args) {
+  HandleScope scope;
+  Local&lt;Function&gt; callback;
+  int n;
+  <div class="args">  if (args.Length() &gt; 0 && args[0]-&gt;IsNumber()) {
+    n = args[0]-&gt;ToInteger()-&gt;Value();
+  } else {
+    return ThrowException(Exception::Error(
+      String::New("You must supply an integer")));
+  }
+
+  if (args.Length() &gt; 1 && args[1]-&gt;IsFunction()) {
+    callback = Local&lt;Function&gt;::Cast(args[1]);
+  } else {
+    return ThrowException(Exception::Error(
+      String::New("You must supply a callback")));
+  }</div>
+  FibonacciContext *context = 
+    new FibonacciContext(n, callback);
+
+  uv_queue_work(uv_default_loop(), &context-&gt;request,
+         <span class="worker-keyword">FibonacciWorker</span>, <span class="worker-after-keyword">FibonacciWorkerAfter</span>);
+
+  return scope.Close(Undefined());
+}</pre></div>
+
+          <div class="right">
+          <div class="worker not-displayed" style="margin-top: 90px;">
+         <pre class="terminal cpp">
+void <span class="keyword">FibonacciWorker</span>(uv_work_t *req) {
+  FibonacciContext* context = 
+      <span class="worker-context">static_cast&lt;FibonacciContext*&gt;(req-&gt;data);</span>
+  <span class="worker-input">int n = context-&gt;input;</span>
+  <span class="worker-result">context-&gt;result = fibonacci(n);</span>
+}</pre>
+
+<div  style="margin: 20px; padding: 20px;" class="no-v8-access emphasized-text not-displayed">
+  <h3>Do not access v8 variables in the worker.</h3>
+</div>
+
+</div>
+         <div class="worker-after not-displayed" style="margin-top: 90px;"> 
+          <pre class="terminal">
+void <span class="keyword">FibonacciWorkerAfter</span>(uv_work_t *req) {
+  HandleScope scope;
+  <span class="worker-after-context">FibonacciContext* context =
+    static_cast&lt;FibonacciContext*&gt;(req-&gt;data);</span>
+  Local&lt;Value&gt; argv[] =
+    { Null(), Number::New(<span class="worker-after-results">context-&gt;result</span>) };
+  // call the callback(null, result);
+  <span class="worker-after-callback">context-&gt;callback-&gt;Call(
+    Context::GetCurrent()-&gt;Global(), 2, argv);</span>
+  delete context;
+  return;
+};</pre></div></div>
+        </div>
+
+
+<ul>
+  <li class="function-desc"><span class="emphasized-text code">fibonacci.calculate(<span class="args">n, function(err, result) { ... }</span>)</span>
+</ul>
+
+<div class="fragment" data-add-class="highlight" data-target="args"></div>
+<div class="fragment continue" data-remove-class="highlight" data-target="args"></div>
+<div class="fragment continue" data-add-class="not-displayed" data-target="function-desc"></div>
+
+<div class="fragment continue" data-add-class="green-highlight" data-target="worker-keyword"></div>
+<div class="fragment continue" data-add-class="displayed" data-target="no-v8-access"></div>
+<div class="fragment" data-add-class="displayed" data-target="worker"></div>
+<div class="fragment" data-add-class="highlight" data-target="worker-context"></div>
+<div class="fragment continue" data-remove-class="highlight" data-target="worker-context"></div>
+<div class="fragment" data-add-class="highlight" data-target="worker-input"></div>
+<div class="fragment continue" data-remove-class="highlight" data-target="worker-input"></div>
+<div class="fragment" data-add-class="highlight" data-target="worker-result"></div>
+<div class="fragment continue" data-remove-class="highlight" data-target="worker-result"></div>
+<div class="fragment continue" data-remove-class="displayed" data-target="no-v8-access"></div>
+
+<div class="fragment continue" data-remove-class="displayed" data-target="worker"></div>
+<div class="fragment continue" data-add-class="displayed" data-target="worker-after"></div>
+
+
+<div class="fragment continue" data-remove-class="green-highlight" data-target="worker-keyword"></div>
+<div class="fragment continue" data-add-class="green-highlight" data-target="worker-after-keyword"></div>
+<div class="fragment" data-add-class="highlight" data-target="worker-after-context"></div>
+<div class="fragment continue" data-remove-class="highlight" data-target="worker-after-context"></div>
+<div class="fragment" data-add-class="highlight" data-target="worker-after-results"></div>
+<div class="fragment continue " data-remove-class="highlight" data-target="worker-after-results"></div>
+<div class="fragment" data-add-class="highlight" data-target="worker-after-callback"></div>
+
+      </section>
+     
+      <section>
+        <h1>Thank<strong>You</strong></h1>
+
+        <div>
+          Slides + Code: <A href="https://github.com/jandre/node-native-presentation">https://github.com/jandre/node-native-presentation</a>
+
+        </div>
+
+      </section>
+
+
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.min.js"></script>
+
+    <script src="jquery-1.7.2.min.js"></script>
+		<script>
+
+      $(function() {
+			// Full list of configuration options available here:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+
+				theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+				transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+
+				// Optional libraries used to extend on reveal.js
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+					{ src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+					// { src: 'plugin/search/search.js', async: true, condition: function() { return !!document.body.classList; } }
+					// { src: 'plugin/remotes/remotes.js', async: true, condition: function() { return !!document.body.classList; } }
+				]
+			});
+
+      Reveal.addEventListener( 'fragmenthidden', function( event ) {
+        var item = $(event.fragment);
+
+        // event.fragment = the fragment DOM element
+
+        if (item.attr('data-add-class')) {
+          var class_name = item.attr('data-add-class');
+          var target = $("." + item.attr('data-target'));
+          target.removeClass(class_name);
+        }
+
+      });
+
+
+      Reveal.addEventListener( 'fragmentshown', function( event ) {
+        var item = $(event.fragment);
+        $('span.cursor').removeClass('selected');
+        item.find('span.cursor').addClass('selected');
+
+        if (item.attr('data-highlight-block')) {
+          var target = $("." + item.attr('data-highlight-block'));
+          target.each(function(i, e) {hljs.highlightBlock(e, 'c++')});
+        }
+
+        if (item.attr('data-add-class')) {
+          var class_name = item.attr('data-add-class');
+          var target = $("." + item.attr('data-target'));
+          target.addClass(class_name);
+          var target = $("#v8-persistent");
+          target.addClass("highlighted");
+
+        }
+
+        if (item.attr('data-remove-class')) {
+          var class_name = item.attr('data-remove-class');
+          var target = $("." + item.attr('data-target'));
+          target.removeClass(class_name);
+        }
+      
+
+        // continue
+        if (item.hasClass('continue')) {
+          Reveal.nextFragment();
+        }
+
+      });
+
+      });
+		</script>
+
+	</body>
+</html>
