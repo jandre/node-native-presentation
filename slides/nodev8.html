@@ -17,13 +17,16 @@
 	<link rel="stylesheet" href="extensions/status/deck.status.css">
 	<link rel="stylesheet" href="extensions/hash/deck.hash.css">
 	<link rel="stylesheet" href="extensions/scale/deck.scale.css">
+  <link rel="stylesheet" href="extensions/codemirror/deck.codemirror.css">
+  <link rel="stylesheet" href="extensions/codemirror/themes/default.css">
 
 	<!-- Style theme. More available in /themes/style/ or create your own. -->
 	<link rel="stylesheet" href="nodev8.css">
 	
 	<!-- Transition theme. More available in /themes/transition/ or create your own. -->
-	<link rel="stylesheet" href="move.css">
+	<!-- <link rel="stylesheet" href="move.css"> -->
 	
+  <link rel="stylesheet" href="local.css">
 	<!-- Required Modernizr file -->
 	<script src="modernizr.custom.js"></script>
 </head>
@@ -42,6 +45,52 @@
 <section class="slide">
 	<h1>Here</h1>
 </section>
+
+<section class="slide">
+
+<div>
+  <div>
+    <div>Example: Get uid from username</div>
+    <div>"The naive way"</div>
+  </div>
+
+    <textarea id="code" name="code" class="code" mode="javascript">
+var exec = require('child_process').exec;
+
+exports.uid = function(username, cb) {
+
+  exec('id -u ' + username, function(err, stdout, stderr) {
+    cb(err, stdout);
+  });
+
+}
+    </textarea>
+
+<pre>
+<span class="black">$ <span class="cursor"> </span><span class="slide" id="configure-1"><strong>node-waf configure</strong><span class="cursor"> </span></span></span><span class="slide" id="configure-2">
+Setting srcdir to               : <span class="green">/.../minimum</span>
+Setting blddir to               : <span class="green">/.../minimum/build</span>
+Checking for program g++ or c++ : <span class="green">/usr/bin/g++</span>
+Checking for program cpp        : <span class="green">/usr/bin/cpp</span>
+Checking for program ar         : <span class="green">/usr/bin/ar</span>
+Checking for program ranlib     : <span class="green">/usr/bin/ranlib</span>
+Checking for g++                : <span class="green">ok</span>
+Checking for node path          : <span class="yellow">not found</span>
+Checking for node prefix        : <span class="green">ok /usr/local</span>
+<span class="green">'configure' finished successfully (0.057s)</span>
+<span class="black">$ </span><span class="cursor"> </span></span><span class="slide black" id="configure-3"><strong>node-waf build</strong><span class="cursor"> </span></span>
+<span class="slide" id="configure-4"><span class="green">Waf: Entering directory `/.../minimum/build'</span>
+[1/2] <span class="green">cxx: modulename.cpp -> build/Release/modulename_1.o</span>
+[2/2] <span class="yellow">cxx_link: build/Release/modulename_1.o ->
+          build/Release/modulename.node</span>
+<span class="green">Waf: Leaving directory `/.../minimum/build'</span>
+<span class="green">'build' finished successfully (0.539s)</span>
+<span class="black">$ </span><span class="cursor"> </span></span>
+</pre>
+</div>
+</section>
+
+
 
 <!-- End slides. -->
 
@@ -84,13 +133,23 @@
 <script src="extensions/goto/deck.goto.js"></script>
 <script src="extensions/status/deck.status.js"></script>
 <script src="extensions/navigation/deck.navigation.js"></script>
-<script src="extensions/scale/deck.scale.js"></script>
+
+<script src="extensions/codemirror/codemirror.js"></script>
+<script src="extensions/codemirror/mode/javascript/javascript.js"></script>
+<script src="extensions/codemirror/mode/css/css.js"></script>
+<script src="extensions/codemirror/deck.codemirror.js"></script>
 
 <!-- Initialize the deck. You can put this in an external file if desired. -->
 <script>
-	$(function() {
-		$.deck('.slide');
-	});
+
+$(function() {
+  $.extend(true, $.deck.defaults, {
+    codemirror: {
+      theme: 'kkaefer'
+    }
+  });
+  $.deck('.slide');
+});
 </script>
 </body>
 </html>
