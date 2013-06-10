@@ -1,0 +1,44 @@
+@import url(http://fonts.googleapis.com/css?family=Lato:300,400,700|Satisfy);
+
+html,body{
+	background-color: #000;
+	color: #000;
+	font: 1.0em Lato;
+}
+
+*, *:after, *:before {
+-webkit-box-sizing: border-box;
+-moz-box-sizing: border-box;
+box-sizing: border-box;
+}
+
+h1{
+position: absolute;
+font-weight: 300 !important;
+font-size: 4.4em;
+line-height: 1;
+letter-spacing: 6px;
+margin: 0;
+top: 12% !important;
+width: 100%;
+text-align: center;
+text-transform: uppercase;
+word-spacing: -0.3em;
+	color: #fff;
+}
+
+h1 strong {
+	color: rgba(0, 0, 0, 0.2);
+}
+
+section{
+	background: #7BB7FA;
+}
+
+section#slide-1{
+	background: #FD6A62;
+}
+
+section#slide-2{
+	background: #60D7A9;
+}
