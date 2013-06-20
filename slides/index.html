@@ -240,34 +240,6 @@ try {
  </div>
 </section>
 
-<section data-state="blue">
-   <div>
-     <h2 class="pink-text">Setting up our project: pwname</h2>
-     <pre class="terminal">
-<span class="black">$ <span class="cursor selected"> </span><span class="fragment"><strong>mkdir pwname && cd pwname/</strong><span class="cursor"> </span></span></span> <span class="fragment"><span class="highlight"># setup folders </span><span class="black">
-$ <span class="cursor"> </span></span></span><span class="fragment"><strong>touch binding.gyp && mkdir src/ && touch src/pwname.cc</strong><span class="cursor"> </span></span> <span class="highlight fragment"># placeholders for c build and sources</span> <span class="black fragment">
-$ <span class="cursor"> </span><span class="fragment"><strong>mkdir lib && touch lib/pwname.js</strong><span class="cursor"> </span></span></span> <span class="highlight fragment"># placeholders for javascript interface </span><span class="black fragment">
-$ <span class="cursor"> </span><span class="fragment"><strong>npm init</strong><span class="cursor"> </span></span></span> <span class="highlight fragment"># npm init </span><span class="fragment">
-...
-{
-  "name": "pwname",
-  "version": "0.1.0",
-  "description": "ERROR: No README.md file found!",
-  "main": "lib/pwname.js",  <span class="highlight"> // NOTE: edited from index.js</span>
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "install": "node-gyp rebuild"
-  },
-  "repository": "",
-  "author": "",
-  "license": "BSD",
-  "gypfile": true
-}</span>
-    </pre>
-  </div>
-
-</section>
-
 <section data-state="green"> 
     <h2>basic <strong>module</strong> structure</h2>  
 
@@ -667,8 +639,8 @@ gid: <span class="yellow">0</span> }
 <section>
   <h1>Survived <strong>so</strong> far?</h1>
 <h2>next</h2>
-<h3>wrapping c++ objects for javascript</h3>
-<h3 class="dark">async work with threads! using libuv</h3>
+<a href="#/21"><h3>wrapping c++ objects for javascript</h3></a>
+<a href="#/28"><h3 class="dark">async work using libuv</h3></a>
 </section>
 
 <section data-state="green">
