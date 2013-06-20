@@ -328,17 +328,18 @@ $ <span class="cursor"> </span><span class="fragment"><strong>npm init</strong><
   }]
 }</pre>
         <ul>
-          <li class="fragment continue">The <span class="emphasized-text code">target_name</span> dictates the shared object name <span class="emphasized-text code">pwname.node</span></li> 
-          <li style="display: none;" class="fragment" data-target="target_name" data-add-class="highlight"></li>
-          <li style="display: none;" class="fragment continue" data-target="target_name" data-remove-class="highlight"></li>
-          <li class="fragment continue"><span class="emphasized-text code">sources</span> get compiled and linked together to form <span class="emphasized-text code">pwname.node</span></li> 
-          <li style="display: none;" class="fragment" data-target="sources" data-add-class="highlight"></li>
-          <li style="display: none;" class="fragment continue" data-target="sources" data-remove-class="highlight"></li>
-
           <li class="fragment">building our project
               <ul><li class="code emphasized-text">node-gyp rebuild</li>
               </ul>
-          </li>
+          </li>         <li class="fragment continue">[ <span class="emphasized-text code">pwname.cc</span>, ... ] → [ <span class="emphasized-text code">pwname.o</span>, ... ]<span class="build-output hidden"> → <span class="emphasized-text code">pwname.node</span></span></li> 
+
+          <li style="display: none;" class="fragment" data-target="sources" data-add-class="highlight"></li>
+          <li style="display: none;" class="fragment continue" data-target="sources" data-remove-class="highlight"></li>
+
+          <li style="display: none;" class="fragment continue" data-target="build-output" data-add-class="show"></li>
+          <li style="display: none;" class="fragment" data-target="target_name" data-add-class="highlight"></li>
+          <li style="display: none;" class="fragment continue" data-target="target_name" data-remove-class="highlight"></li>
+          
           <li class="fragment">This is a <strong>very basic</strong> example
 
             <ul class="small">
@@ -532,7 +533,7 @@ Handle&lt;Value&gt; Uid(<span class="keyword">const</span> Arguments&amp; args)
 
 <section data-state="pink">
   <h3 class="pink-text">More about Handles</h3>
-  <div class="dark">Reference counters for pointers</div>
+  <div class="dark">"Smart Pointers"</div>
   
   <div>
     <svg width="660px" height="250px" viewBox="0 0 457 123" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:sketch="http://www.bohemiancoding.com/sketch/ns">
@@ -567,9 +568,8 @@ Handle&lt;Value&gt; Uid(<span class="keyword">const</span> Arguments&amp; args)
 
 
    <div class="handle-desc-1 fragment"> 
-       <span class="emphasized-text code">Local&lt;T&gt; and Handle&lt;T&gt;</span> 
-         free their contents when out of scope.
-   
+       <span class="emphasized-text code">Local&lt;T&gt; and Handle&lt;T&gt;</span> contents freed when out of scope
+           
 <pre><code class="cpp">void UselessFunction() {
  HandleScope scope;
  Local&lt;Value&gt; helloHandle = String::New("hello"); // allocation here
@@ -638,16 +638,16 @@ gid: <span class="yellow">0</span> }
   <span class="keyword">struct</span> passwd *user = NULL;
   Local&lt;Function&gt; callback;
 
-  <span class="keyword">if</span> (args.Length() &gt; <span class="number">1</span> &amp;&amp; args[<span class="number">1</span>]-&gt;IsFunction()) {
+  <span class="callback"><span class="keyword">if</span> (args.Length() &gt; <span class="number">1</span> &amp;&amp; args[<span class="number">1</span>]-&gt;IsFunction()) {
     callback = Local&lt;Function&gt;::Cast(args[<span class="number">1</span>]);
-  }
+  }</span>
 
-  <span class="comment">// ... pwname fetch </span>
+  <span class="comment">[...] </span>
 
   <span class="keyword">if</span> (user) {
     Local&lt;Object&gt; obj = Object::New();
     obj-&gt;Set(String::New(<span class="string">"uid"</span>), Number::New(user-&gt;pw_uid));
-    <span class="comment">// ... setting data as usual</span>
+    <span class="comment">[...] </span>
 
     <span class="keyword">if</span> (callback.IsEmpty()) {
       <span class="keyword">return</span> scope.Close(obj);
@@ -657,7 +657,7 @@ gid: <span class="yellow">0</span> }
       <span class="callback"><span class="keyword">return</span> callback-&gt;Call(Context::GetCurrent()-&gt;Global(), <span class="number">2</span>, argv); </span>
     }
   } <span class="keyword">else</span> {
-    <span class="comment">// ... error</span>
+    <span class="comment">[...]</span>
   }
 }</pre>
 
@@ -707,7 +707,7 @@ int main ()
       <section data-state="pink">
 <h2 class="pink-text">simpletime.cc definition</h2>
 
-<pre class="cpp terminal"><span class="keyword">class</span> Time : <span class="keyword">public</span> node::ObjectWrap {
+<pre class="cpp terminal"><span class="keyword">class</span> Time : <span class="keyword">public</span> <span class="objwrap">node::ObjectWrap</span> {
 
   <span class="keyword">public</span>:
     <span class="keyword">static</span> Handle&lt;Value&gt; New(<span class="keyword">const</span> Arguments &amp;args); <span class="comment">// new Time();</span>
@@ -738,6 +738,7 @@ int main ()
   NODE_MODULE(simpletime, init);
 }</pre>
 
+<div class="fragment" style="display: none;" data-add-class="highlight" data-target="objwrap"></div>
 </section>
 
       <section>
@@ -764,6 +765,7 @@ int main ()
           <ul>
            <li class="fragment continue"><span class="emphasized-text code">function Time() {};</span></li>
            <li class="fragment continue"><span class="emphasized-text code">Time.prototype.constructor = ...</span></li>
+           <li class="fragment continue"><span class="emphasized-text code">exports.Time = Time;</span></li>
           </ul>
         </div>
         
@@ -818,7 +820,7 @@ Handle&lt;Value&gt; Time::New(const Arguments& args) {
       </section>
 <!-- async -->
       <section>
-        <h2 class="pink-text">Our problem: Fibonacci</h2>
+        <h2 class="pink-text">Async Fibonacci?</h2>
         <div>
           "Here's a fun fact: every function call that does CPU work also blocks. This function, which calculates the n'th Fibonacci number, will block the current thread of execution because it's using the CPU."
           <div class="dark"> -- `node js is cancer` by Ted Dzuiba</div>
@@ -838,15 +840,29 @@ Handle&lt;Value&gt; Time::New(const Arguments& args) {
 
       </section>
 
+      <section data-state="green">
+        <h2 class="pink-text">Yes, it's possible</h2>
+
+        <pre class="terminal"><code class="javascript">var fibonacci = require('build/Release/fibonacci.node');
+
+var n = 20;
+
+fibonacci.calculate(n, function(err, result) {
+  console.log("Fibonacci for n", n, "is", result);
+});
+
+console.log("Hey! This executes right away, cuz fibonacci is async! ..."); </code></pre>
+
+
+      </section>
+
       <section data-state="pink">
         <h2 class="pink-text">uv_queue_work to the rescue</h2>
-        <pre class="terminal">
-uv_queue_work(<span class="uv-queue-1">uv_default_loop()</span>, <span class="uv-queue-2">&context->request</span>,
-      <span class="uv-queue-3">FibonacciWorker</span>, <span class="uv-queue-4">FibonacciWorkerAfter</span>); 
-        </pre>
+        <pre class="terminal">uv_queue_work(<span class="uv-queue-1">uv_default_loop()</span>, <span class="uv-queue-2">&context->request</span>,
+      <span class="uv-queue-3">FibonacciWorker</span>, <span class="uv-queue-4">FibonacciWorkerAfter</span>);</pre>
 
         <ul>
-          <li class="fragment continue">Runs <span class="code emphasized-text">FibonacciWorker</span> function in a separate thread
+          <li class="fragment continue">Runs <span class="code emphasized-text">FibonacciWorker</span> function in a thread from libuv's worker pool
             <div class="fragment" data-add-class="highlight" data-target="uv-queue-3"></div>
           </li>
           <li class="fragment continue">On completion, <span class="code emphasized-text">FibonacciWorkerAfter</span> executed in event loop. 
@@ -888,26 +904,26 @@ uv_queue_work(<span class="uv-queue-1">uv_default_loop()</span>, <span class="uv
 
       <section data-state="green">
 
-<h3 class="pink-text">fibonacci.calculate</h3>
+<h3 class="pink-text">fibonacci.calculate()</h3>
         <div class="two-columns">
           <div class="left">
           <pre class="cpp terminal">Handle&lt;Value&gt; <span class="keyword">Calculate</span>(const Arguments& args) {
   HandleScope scope;
   Local&lt;Function&gt; callback;
   int n;
-  <div class="args">  if (args.Length() &gt; 0 && args[0]-&gt;IsNumber()) {
-    n = args[0]-&gt;ToInteger()-&gt;Value();
+  if (args.Length() &gt; 0 && args[0]-&gt;IsNumber()) {
+    <span class="args">n = args[0]-&gt;ToInteger()-&gt;Value();</span>
   } else {
     return ThrowException(Exception::Error(
       String::New("You must supply an integer")));
   }
 
   if (args.Length() &gt; 1 && args[1]-&gt;IsFunction()) {
-    callback = Local&lt;Function&gt;::Cast(args[1]);
+    <span class="args">callback = Local&lt;Function&gt;::Cast(args[1]);</span>
   } else {
     return ThrowException(Exception::Error(
       String::New("You must supply a callback")));
-  }</div>
+  }
   FibonacciContext *context = 
     new FibonacciContext(n, callback);
 
@@ -928,7 +944,7 @@ void <span class="keyword">FibonacciWorker</span>(uv_work_t *req) {
 }</pre>
 
 <div  style="margin: 20px; padding: 20px;" class="no-v8-access emphasized-text not-displayed">
-  <h3>Do not access v8 variables in the worker.</h3>
+  <h3>Do not access v8 memory in the worker!!!</h3>
 </div>
 
 </div>
@@ -950,7 +966,10 @@ void <span class="keyword">FibonacciWorkerAfter</span>(uv_work_t *req) {
 
 
 <ul>
-  <li class="function-desc"><span class="emphasized-text code">fibonacci.calculate(<span class="args">n, function(err, result) { ... }</span>)</span>
+  <li class="function-desc"><span class="emphasized-text code">fibonacci.calculate(<span class="args">n</span>, <span class="args">function(err, result) { ... }</span>)</span>
+  <li class="desc-2 not-displayed">Result from our calculation</li>
+  <li class="desc-3 not-displayed"><span class="emphasized-text code">callback(err, result)</span></li>
+
 </ul>
 
 <div class="fragment" data-add-class="highlight" data-target="args"></div>
@@ -958,7 +977,6 @@ void <span class="keyword">FibonacciWorkerAfter</span>(uv_work_t *req) {
 <div class="fragment continue" data-add-class="not-displayed" data-target="function-desc"></div>
 
 <div class="fragment continue" data-add-class="green-highlight" data-target="worker-keyword"></div>
-<div class="fragment continue" data-add-class="displayed" data-target="no-v8-access"></div>
 <div class="fragment" data-add-class="displayed" data-target="worker"></div>
 <div class="fragment" data-add-class="highlight" data-target="worker-context"></div>
 <div class="fragment continue" data-remove-class="highlight" data-target="worker-context"></div>
@@ -966,6 +984,7 @@ void <span class="keyword">FibonacciWorkerAfter</span>(uv_work_t *req) {
 <div class="fragment continue" data-remove-class="highlight" data-target="worker-input"></div>
 <div class="fragment" data-add-class="highlight" data-target="worker-result"></div>
 <div class="fragment continue" data-remove-class="highlight" data-target="worker-result"></div>
+<div class="fragment" data-add-class="displayed" data-target="no-v8-access"></div>
 <div class="fragment continue" data-remove-class="displayed" data-target="no-v8-access"></div>
 
 <div class="fragment continue" data-remove-class="displayed" data-target="worker"></div>
@@ -977,8 +996,10 @@ void <span class="keyword">FibonacciWorkerAfter</span>(uv_work_t *req) {
 <div class="fragment" data-add-class="highlight" data-target="worker-after-context"></div>
 <div class="fragment continue" data-remove-class="highlight" data-target="worker-after-context"></div>
 <div class="fragment" data-add-class="highlight" data-target="worker-after-results"></div>
-<div class="fragment continue " data-remove-class="highlight" data-target="worker-after-results"></div>
-<div class="fragment" data-add-class="highlight" data-target="worker-after-callback"></div>
+<div class="fragment continue" data-remove-class="highlight" data-target="worker-after-results"></div>
+<div class="fragment" data-add-class="displayed" data-target="desc-2"></div>
+<div class="fragment continue" data-add-class="highlight" data-target="worker-after-callback"></div>
+<div class="fragment" data-add-class="displayed" data-target="desc-3"></div>
 
       </section>
       <section>
@@ -987,7 +1008,10 @@ void <span class="keyword">FibonacciWorkerAfter</span>(uv_work_t *req) {
 
         <ul>
           <li>Think of API design</li>
-          <li>Reference other modules</li>
+          <li>Look at other modules
+              <ul>
+              </ul>
+          </li>
         <ul>
 
       </section>
@@ -999,10 +1023,6 @@ void <span class="keyword">FibonacciWorkerAfter</span>(uv_work_t *req) {
           Slides + Code: <A href="https://github.com/jandre/node-native-presentation">https://github.com/jandre/node-native-presentation</a>
         </div>
         <div>
-          <div>References:</div>
-          <ul>
-            <li></li>
-          </ul>
         </div>
 
       </section>
